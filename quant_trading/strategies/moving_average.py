@@ -4,11 +4,11 @@ Classic trend-following strategy using moving average crossovers
 """
 
 import pandas as pd
-from typing import List, Optional
-from .base_strategy import BaseStrategy, Signal, SignalType
+from typing import List, Optional, Dict, Any
+from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal
 
 
-class MovingAverageStrategy(BaseStrategy):
+class MovingAverageStrategy:
     """
     Moving Average Crossover Strategy
     
@@ -32,26 +32,21 @@ class MovingAverageStrategy(BaseStrategy):
             quantity: Number of shares to trade
             min_periods: Minimum periods required for signal generation
         """
-        super().__init__(
-            name="MovingAverage",
-            short_window=short_window,
-            long_window=long_window,
-            quantity=quantity,
-            min_periods=min_periods or long_window
-        )
-        
         # Validate parameters
         if short_window >= long_window:
             raise ValueError("Short window must be less than long window")
         if short_window < 1 or long_window < 1:
             raise ValueError("Window periods must be positive")
             
-    def _setup_indicators(self, data: pd.DataFrame) -> None:
-        """Setup moving average indicators"""
-        # No persistent setup needed - calculated on demand
-        pass
-    
-    def generate_signals(self, data: pd.DataFrame) -> List[Signal]:
+        self.name = "MovingAverage"
+        self.params = {
+            'short_window': short_window,
+            'long_window': long_window,
+            'quantity': quantity,
+            'min_periods': min_periods or long_window
+        }
+            
+    def get_signals(self, data: pd.DataFrame) -> List[Signal]:
         """
         Generate moving average crossover signals
         
@@ -61,6 +56,7 @@ class MovingAverageStrategy(BaseStrategy):
         Returns:
             List of trading signals
         """
+        validate_data(data)
         if len(data) < self.params['min_periods']:
             return []
             
@@ -92,12 +88,11 @@ class MovingAverageStrategy(BaseStrategy):
         
         # Golden Cross - Short MA crosses above Long MA (Buy signal)
         if (current_short > current_long and prev_short <= prev_long):
-            signal = Signal(
+            signal = create_signal(
                 symbol='default',
                 action=SignalType.BUY,
                 quantity=self.params['quantity'],
                 price=current_price,
-                timestamp=current_time,
                 confidence=self._calculate_confidence(current_short, current_long, data),
                 metadata={
                     'short_ma': current_short,
@@ -106,16 +101,16 @@ class MovingAverageStrategy(BaseStrategy):
                     'price_momentum': (current_price / data['close'].iloc[-5] - 1) if len(data) >= 5 else 0
                 }
             )
+            signal.timestamp = current_time
             signals.append(signal)
             
         # Death Cross - Short MA crosses below Long MA (Sell signal)  
         elif (current_short < current_long and prev_short >= prev_long):
-            signal = Signal(
+            signal = create_signal(
                 symbol='default',
                 action=SignalType.SELL,
                 quantity=self.params['quantity'],
                 price=current_price,
-                timestamp=current_time,
                 confidence=self._calculate_confidence(current_short, current_long, data),
                 metadata={
                     'short_ma': current_short,
@@ -124,6 +119,7 @@ class MovingAverageStrategy(BaseStrategy):
                     'price_momentum': (current_price / data['close'].iloc[-5] - 1) if len(data) >= 5 else 0
                 }
             )
+            signal.timestamp = current_time
             signals.append(signal)
             
         return signals
@@ -162,6 +158,14 @@ class MovingAverageStrategy(BaseStrategy):
                 confidence -= 0.1
                 
         return max(0.1, min(1.0, confidence))
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        """Get strategy parameters"""
+        return self.params.copy()
+    
+    def get_name(self) -> str:
+        """Get strategy name"""
+        return self.name
     
     def get_indicator_values(self, data: pd.DataFrame) -> pd.DataFrame:
         """

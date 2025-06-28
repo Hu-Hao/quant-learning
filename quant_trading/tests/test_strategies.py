@@ -10,7 +10,7 @@ from datetime import datetime
 from quant_trading.strategies.moving_average import MovingAverageStrategy
 from quant_trading.strategies.momentum import MomentumStrategy
 from quant_trading.strategies.mean_reversion import MeanReversionStrategy
-from quant_trading.strategies.base_strategy import Signal, SignalType
+from quant_trading.strategies.strategy_interface import Signal, SignalType
 from quant_trading.data.data_fetcher import create_sample_data
 
 
@@ -61,17 +61,17 @@ class TestMovingAverageStrategy(unittest.TestCase):
         with self.assertRaises(ValueError):
             MovingAverageStrategy(short_window=0, long_window=10)  # Invalid: non-positive
             
-    def test_data_validation(self):
-        """Test data validation"""
-        # Missing columns
-        invalid_data = pd.DataFrame({'price': [1, 2, 3]})
-        with self.assertRaises(ValueError):
-            self.strategy.validate_data(invalid_data)
-            
-        # Empty data
-        empty_data = pd.DataFrame()
-        with self.assertRaises(ValueError):
-            self.strategy.validate_data(empty_data)
+    def test_protocol_interface(self):
+        """Test protocol interface methods"""
+        # Test get_parameters
+        params = self.strategy.get_parameters()
+        self.assertIsInstance(params, dict)
+        self.assertIn('short_window', params)
+        self.assertIn('long_window', params)
+        
+        # Test get_name
+        name = self.strategy.get_name()
+        self.assertEqual(name, 'MovingAverage')
             
     def test_signal_generation(self):
         """Test signal generation"""
@@ -89,22 +89,23 @@ class TestMovingAverageStrategy(unittest.TestCase):
         }, index=dates)
         
         # Get signals for the full dataset
-        signals = self.strategy.get_signal(data)
+        signals = self.strategy.get_signals(data)
         
         # Should have some signals
         self.assertIsInstance(signals, list)
         
-        # If there are signals, they should be properly formatted
+        # If there are signals, they should be Signal objects
         for signal in signals:
-            self.assertIn('symbol', signal)
-            self.assertIn('action', signal)
-            self.assertIn('quantity', signal)
-            self.assertIn('price', signal)
+            self.assertIsInstance(signal, Signal)
+            self.assertEqual(signal.symbol, 'default')
+            self.assertIn(signal.action, [SignalType.BUY, SignalType.SELL, SignalType.HOLD])
+            self.assertIsInstance(signal.quantity, int)
+            self.assertIsInstance(signal.price, float)
             
     def test_insufficient_data(self):
         """Test behavior with insufficient data"""
         short_data = create_sample_data(5)  # Less than long_window
-        signals = self.strategy.get_signal(short_data)
+        signals = self.strategy.get_signals(short_data)
         self.assertEqual(len(signals), 0)
         
     def test_indicator_values(self):

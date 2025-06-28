@@ -5,11 +5,11 @@ Trades based on recent price momentum and trend strength
 
 import pandas as pd
 import numpy as np
-from typing import List, Optional
-from .base_strategy import BaseStrategy, Signal, SignalType
+from typing import List, Optional, Dict, Any
+from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal
 
 
-class MomentumStrategy(BaseStrategy):
+class MomentumStrategy:
     """
     Momentum Trading Strategy
     
@@ -39,16 +39,16 @@ class MomentumStrategy(BaseStrategy):
             rsi_oversold: RSI oversold threshold
             rsi_overbought: RSI overbought threshold
         """
-        super().__init__(
-            name="Momentum",
-            lookback_period=lookback_period,
-            momentum_threshold=momentum_threshold,
-            quantity=quantity,
-            volatility_filter=volatility_filter,
-            rsi_period=rsi_period,
-            rsi_oversold=rsi_oversold,
-            rsi_overbought=rsi_overbought
-        )
+        self.name = "Momentum"
+        self.params = {
+            'lookback_period': lookback_period,
+            'momentum_threshold': momentum_threshold,
+            'quantity': quantity,
+            'volatility_filter': volatility_filter,
+            'rsi_period': rsi_period,
+            'rsi_oversold': rsi_oversold,
+            'rsi_overbought': rsi_overbought
+        }
         
         # Validate parameters
         if lookback_period < 2:
@@ -56,12 +56,7 @@ class MomentumStrategy(BaseStrategy):
         if not 0 < momentum_threshold < 1:
             raise ValueError("Momentum threshold must be between 0 and 1")
     
-    def _setup_indicators(self, data: pd.DataFrame) -> None:
-        """Setup momentum indicators"""
-        # No persistent setup needed - calculated on demand
-        pass
-    
-    def generate_signals(self, data: pd.DataFrame) -> List[Signal]:
+    def get_signals(self, data: pd.DataFrame) -> List[Signal]:
         """
         Generate momentum-based trading signals
         
@@ -71,6 +66,7 @@ class MomentumStrategy(BaseStrategy):
         Returns:
             List of trading signals
         """
+        validate_data(data)
         min_periods = max(self.params['lookback_period'], self.params['rsi_period']) + 1
         if len(data) < min_periods:
             return []
@@ -97,12 +93,11 @@ class MomentumStrategy(BaseStrategy):
             
             confidence = self._calculate_buy_confidence(momentum, rsi, data)
             
-            signal = Signal(
+            signal = create_signal(
                 symbol='default',
                 action=SignalType.BUY,
                 quantity=self.params['quantity'],
                 price=current_price,
-                timestamp=current_time,
                 confidence=confidence,
                 metadata={
                     'momentum': momentum,
@@ -111,6 +106,7 @@ class MomentumStrategy(BaseStrategy):
                     'volatility_filtered': self.params['volatility_filter']
                 }
             )
+            signal.timestamp = current_time
             signals.append(signal)
             
         # Generate sell signal
@@ -120,12 +116,11 @@ class MomentumStrategy(BaseStrategy):
             
             confidence = self._calculate_sell_confidence(momentum, rsi, data)
             
-            signal = Signal(
+            signal = create_signal(
                 symbol='default',
                 action=SignalType.SELL,
                 quantity=self.params['quantity'],
                 price=current_price,
-                timestamp=current_time,
                 confidence=confidence,
                 metadata={
                     'momentum': momentum,
@@ -134,6 +129,7 @@ class MomentumStrategy(BaseStrategy):
                     'volatility_filtered': self.params['volatility_filter']
                 }
             )
+            signal.timestamp = current_time
             signals.append(signal)
             
         return signals
@@ -224,6 +220,14 @@ class MomentumStrategy(BaseStrategy):
         confidence += rsi_factor * 0.2
         
         return max(0.1, min(1.0, confidence))
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        """Get strategy parameters"""
+        return self.params.copy()
+    
+    def get_name(self) -> str:
+        """Get strategy name"""
+        return self.name
     
     def get_indicator_values(self, data: pd.DataFrame) -> pd.DataFrame:
         """

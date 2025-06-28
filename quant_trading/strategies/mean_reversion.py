@@ -5,11 +5,11 @@ Trades based on price deviations from statistical mean
 
 import pandas as pd
 import numpy as np
-from typing import List, Optional
-from .base_strategy import BaseStrategy, Signal, SignalType
+from typing import List, Optional, Dict, Any
+from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal
 
 
-class MeanReversionStrategy(BaseStrategy):
+class MeanReversionStrategy:
     """
     Mean Reversion Trading Strategy
     
@@ -37,15 +37,15 @@ class MeanReversionStrategy(BaseStrategy):
             use_bollinger_bands: Whether to use Bollinger Bands for additional confirmation
             bollinger_std: Standard deviations for Bollinger Bands
         """
-        super().__init__(
-            name="MeanReversion",
-            window=window,
-            entry_threshold=entry_threshold,
-            exit_threshold=exit_threshold,
-            quantity=quantity,
-            use_bollinger_bands=use_bollinger_bands,
-            bollinger_std=bollinger_std
-        )
+        self.name = "MeanReversion"
+        self.params = {
+            'window': window,
+            'entry_threshold': entry_threshold,
+            'exit_threshold': exit_threshold,
+            'quantity': quantity,
+            'use_bollinger_bands': use_bollinger_bands,
+            'bollinger_std': bollinger_std
+        }
         
         # Validate parameters
         if window < 2:
@@ -53,12 +53,7 @@ class MeanReversionStrategy(BaseStrategy):
         if entry_threshold <= exit_threshold:
             raise ValueError("Entry threshold must be greater than exit threshold")
     
-    def _setup_indicators(self, data: pd.DataFrame) -> None:
-        """Setup mean reversion indicators"""
-        # No persistent setup needed - calculated on demand
-        pass
-    
-    def generate_signals(self, data: pd.DataFrame) -> List[Signal]:
+    def get_signals(self, data: pd.DataFrame) -> List[Signal]:
         """
         Generate mean reversion trading signals
         
@@ -68,6 +63,7 @@ class MeanReversionStrategy(BaseStrategy):
         Returns:
             List of trading signals
         """
+        validate_data(data)
         if len(data) < self.params['window'] + 1:
             return []
         
@@ -89,12 +85,11 @@ class MeanReversionStrategy(BaseStrategy):
             if not self.params['use_bollinger_bands'] or bollinger_signal == 'buy':
                 confidence = self._calculate_buy_confidence(z_score, data)
                 
-                signal = Signal(
+                signal = create_signal(
                     symbol='default',
                     action=SignalType.BUY,
                     quantity=self.params['quantity'],
                     price=current_price,
-                    timestamp=current_time,
                     confidence=confidence,
                     metadata={
                         'z_score': z_score,
@@ -102,6 +97,7 @@ class MeanReversionStrategy(BaseStrategy):
                         'bollinger_confirmation': bollinger_signal == 'buy' if self.params['use_bollinger_bands'] else None
                     }
                 )
+                signal.timestamp = current_time
                 signals.append(signal)
         
         # Generate sell signal (price significantly above mean)
@@ -110,12 +106,11 @@ class MeanReversionStrategy(BaseStrategy):
             if not self.params['use_bollinger_bands'] or bollinger_signal == 'sell':
                 confidence = self._calculate_sell_confidence(z_score, data)
                 
-                signal = Signal(
+                signal = create_signal(
                     symbol='default',
                     action=SignalType.SELL,
                     quantity=self.params['quantity'],
                     price=current_price,
-                    timestamp=current_time,
                     confidence=confidence,
                     metadata={
                         'z_score': z_score,
@@ -123,6 +118,7 @@ class MeanReversionStrategy(BaseStrategy):
                         'bollinger_confirmation': bollinger_signal == 'sell' if self.params['use_bollinger_bands'] else None
                     }
                 )
+                signal.timestamp = current_time
                 signals.append(signal)
         
         return signals
@@ -243,6 +239,14 @@ class MeanReversionStrategy(BaseStrategy):
                 confidence += 0.1
         
         return max(0.1, min(1.0, confidence))
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        """Get strategy parameters"""
+        return self.params.copy()
+    
+    def get_name(self) -> str:
+        """Get strategy name"""
+        return self.name
     
     def get_indicator_values(self, data: pd.DataFrame) -> pd.DataFrame:
         """

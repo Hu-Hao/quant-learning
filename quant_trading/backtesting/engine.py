@@ -6,7 +6,10 @@ Production-ready backtesting with proper execution modeling and risk controls
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Callable, Union
+from typing import Dict, List, Optional, Callable, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..strategies.strategy_interface import StrategyProtocol
 from dataclasses import dataclass
 import logging
 
@@ -418,7 +421,7 @@ class BacktestEngine:
     def run_backtest(
         self,
         data: pd.DataFrame,
-        strategy: Union[Callable, object],
+        strategy: Union[Callable, 'StrategyProtocol', object],
         **strategy_params
     ) -> None:
         """
@@ -426,7 +429,7 @@ class BacktestEngine:
         
         Args:
             data: Market data
-            strategy: Strategy function or object
+            strategy: Strategy function, protocol-based strategy, or legacy object
             **strategy_params: Strategy parameters
         """
         self.reset()
@@ -438,11 +441,18 @@ class BacktestEngine:
             current_price = row.get('close', row.iloc[-1])
             self.price_history.append(current_price)
             
-            # Get strategy signals
-            if hasattr(strategy, 'get_signal'):
-                # Strategy object
+            # Get strategy signals (support multiple interfaces)
+            signals = []
+            if hasattr(strategy, 'get_signals'):
+                # Protocol-based strategy (new interface)
+                signals = strategy.get_signals(data.loc[:idx])
+            elif hasattr(strategy, 'generate_signals'):
+                # Legacy strategy object
+                signals = strategy.generate_signals(data.loc[:idx])
+            elif hasattr(strategy, 'get_signal'):
+                # Single signal legacy interface
                 signals = strategy.get_signal(data.loc[:idx])
-            else:
+            elif callable(strategy):
                 # Strategy function
                 signals = strategy(data.loc[:idx], **strategy_params)
             
@@ -455,12 +465,30 @@ class BacktestEngine:
             prices = {'default': current_price}
             self.update_portfolio_value(prices)
     
-    def _process_signal(self, signal: Dict, current_price: float) -> None:
-        """Process a trading signal"""
-        symbol = signal.get('symbol', 'default')
-        action = signal.get('action', '').lower()
-        quantity = signal.get('quantity', 100)
-        price = signal.get('price', current_price)
+    def _process_signal(self, signal: Union[Dict, object], current_price: float) -> None:
+        """Process a trading signal from any supported format"""
+        # Handle both dict and Signal object formats
+        if hasattr(signal, 'to_dict'):
+            # Signal object with to_dict method
+            signal_dict = signal.to_dict()
+            symbol = signal_dict.get('symbol', 'default')
+            action = signal_dict.get('action', '').lower()
+            quantity = signal_dict.get('quantity', 100)
+            price = signal_dict.get('price', current_price)
+        elif hasattr(signal, 'symbol'):
+            # Signal object with attributes
+            symbol = getattr(signal, 'symbol', 'default')
+            action = getattr(signal, 'action', '').lower()
+            if hasattr(action, 'value'):  # Handle enum
+                action = action.value
+            quantity = getattr(signal, 'quantity', 100)
+            price = getattr(signal, 'price', current_price)
+        else:
+            # Dictionary format
+            symbol = signal.get('symbol', 'default')
+            action = signal.get('action', '').lower()
+            quantity = signal.get('quantity', 100)
+            price = signal.get('price', current_price)
         
         if action == 'buy':
             self.place_order(symbol, quantity, price, 'long')
