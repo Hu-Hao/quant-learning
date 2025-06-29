@@ -55,6 +55,26 @@ The notebook will show you:
 - Individual trade details
 - Benchmark comparison vs Buy & Hold
 
+### 🧪 Testing Your Installation
+
+Before running the examples, you can verify your installation with:
+
+```bash
+# From the project root directory
+python examples/test_installation.py
+
+# Or if you cloned to a different location
+PYTHONPATH=/path/to/quant-learning python examples/test_installation.py
+```
+
+This will test:
+- ✅ All module imports
+- ✅ Strategy creation and protocol interface
+- ✅ Data generation capabilities
+- ✅ Backtesting engine functionality
+- ✅ Signal generation
+- ⚠️ Optional dependencies (matplotlib, yfinance, etc.)
+
 ### 🔧 Customization Options
 
 You can easily modify the notebook to:
