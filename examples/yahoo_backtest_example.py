@@ -88,7 +88,7 @@ def setup_strategies():
     return strategies
 
 
-def run_backtest(data, strategy, initial_capital=100000):
+def run_backtest(data, strategy, initial_capital=100000, allow_short_selling=False):
     """
     Run backtest for a single strategy
     
@@ -96,6 +96,7 @@ def run_backtest(data, strategy, initial_capital=100000):
         data: Market data
         strategy: Trading strategy implementing StrategyProtocol
         initial_capital: Starting capital
+        allow_short_selling: Allow short selling (False for beginners)
         
     Returns:
         dict: Backtest results
@@ -104,7 +105,8 @@ def run_backtest(data, strategy, initial_capital=100000):
         initial_capital=initial_capital,
         commission=0.001,  # 0.1% commission
         slippage=0.001,    # 0.1% slippage
-        max_position_size=0.95
+        max_position_size=0.95,
+        allow_short_selling=allow_short_selling  # Beginner-friendly option
     )
     
     engine.run_backtest(data, strategy)
@@ -264,11 +266,12 @@ def main():
         
         # 3. Run backtests
         print(f"\n🔄 Running backtests with ${initial_capital:,} initial capital...")
+        print(f"📚 BEGINNER MODE: Short selling disabled for safer learning!")
         results = {}
         
         for strategy_name, strategy in strategies.items():
             print(f"   Testing {strategy_name}...")
-            results[strategy_name] = run_backtest(data, strategy, initial_capital)
+            results[strategy_name] = run_backtest(data, strategy, initial_capital, allow_short_selling=False)
             
             final_value = results[strategy_name]['portfolio_values'][-1] if results[strategy_name]['portfolio_values'] else initial_capital
             total_return = (final_value / initial_capital - 1) * 100
@@ -288,8 +291,14 @@ def main():
         print(f"\n💡 Next Steps:")
         print(f"   • Try different stocks by changing 'symbol' variable")
         print(f"   • Adjust strategy parameters for optimization")
+        print(f"   • Enable short selling: change allow_short_selling=True for advanced trading")
         print(f"   • Add risk management features")
         print(f"   • Test on longer time periods")
+        
+        print(f"\n🔰 BEGINNER TIP:")
+        print(f"   This example uses allow_short_selling=False for safer learning.")
+        print(f"   'Sell' signals only close existing long positions, never create short positions.")
+        print(f"   Once comfortable, set allow_short_selling=True for full strategy testing.")
         
     except Exception as e:
         print(f"❌ Error: {str(e)}")

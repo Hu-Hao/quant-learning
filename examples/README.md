@@ -35,7 +35,16 @@ A comprehensive Jupyter notebook that demonstrates:
 3. **Backtesting**
    ```python
    from quant_trading.backtesting.engine import BacktestEngine
-   engine = BacktestEngine(initial_capital=100000)
+   
+   # For beginners - disable short selling
+   engine = BacktestEngine(
+       initial_capital=100000,
+       allow_short_selling=False  # Perfect for beginners!
+   )
+   
+   # Advanced users can enable short selling (default: True)
+   engine = BacktestEngine(initial_capital=100000)  # Short selling enabled
+   
    engine.run_backtest(data, strategy)  # Only StrategyProtocol supported
    ```
 

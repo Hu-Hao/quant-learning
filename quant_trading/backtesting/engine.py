@@ -80,6 +80,11 @@ class BacktestEngine:
     
     Supports only StrategyProtocol-based strategies for clean, simple interface.
     Uses composition over inheritance for maximum flexibility.
+    
+    Beginner-friendly features:
+    - Set allow_short_selling=False to disable short selling
+    - Sell signals will only close existing long positions when short selling is disabled
+    - Perfect for learning without the complexity of short selling
     """
     
     def __init__(
@@ -89,7 +94,8 @@ class BacktestEngine:
         slippage: float = 0.001,
         max_position_size: float = 0.1,  # Maximum position as fraction of capital
         risk_free_rate: float = 0.02,    # For Sharpe ratio calculation
-        benchmark_symbol: Optional[str] = None
+        benchmark_symbol: Optional[str] = None,
+        allow_short_selling: bool = True  # Allow short selling (sell signals)
     ):
         """
         Initialize backtesting engine
@@ -101,12 +107,14 @@ class BacktestEngine:
             max_position_size: Maximum position size as fraction of capital
             risk_free_rate: Risk-free rate for Sharpe ratio
             benchmark_symbol: Symbol for benchmark comparison
+            allow_short_selling: Allow short selling (False for beginners)
         """
         self.initial_capital = initial_capital
         self.commission = commission
         self.slippage = slippage
         self.max_position_size = max_position_size
         self.risk_free_rate = risk_free_rate
+        self.allow_short_selling = allow_short_selling
         self.benchmark_symbol = benchmark_symbol
         
         # State variables
@@ -475,7 +483,20 @@ class BacktestEngine:
         if action_str == 'buy':
             self.place_order(symbol, quantity, price, 'long')
         elif action_str == 'sell':
-            self.place_order(symbol, quantity, price, 'short')
+            if self.allow_short_selling:
+                # Allow short selling (creating new short position)
+                self.place_order(symbol, quantity, price, 'short')
+            else:
+                # Only allow selling to close existing long positions
+                current_position = self.positions.get(symbol)
+                if current_position and current_position.side == 'long' and current_position.quantity > 0:
+                    # Close long position (sell shares we own)
+                    close_quantity = min(quantity, current_position.quantity)
+                    self.place_order(symbol, close_quantity, price, 'short')
+                    self.logger.info(f"Sell signal: Closing {close_quantity} shares of long position in {symbol}")
+                else:
+                    # Ignore sell signal - no long position to close
+                    self.logger.info(f"Sell signal ignored: No long position in {symbol} (short selling disabled)")
     
     def get_performance_summary(self) -> Dict:
         """Generate comprehensive performance summary"""
