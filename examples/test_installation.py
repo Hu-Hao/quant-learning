@@ -120,6 +120,14 @@ def test_backtesting():
         assert engine.initial_capital == 100000
         print("✅ Backtesting execution with StrategyProtocol")
         
+        # Test short selling restriction feature
+        engine_no_short = BacktestEngine(initial_capital=100000, allow_short_selling=False)
+        engine_no_short.run_backtest(data, strategy)
+        
+        assert len(engine_no_short.portfolio_values) > 0
+        assert engine_no_short.allow_short_selling == False
+        print("✅ Beginner-friendly short selling restriction")
+        
         # Test performance calculation
         performance = engine.get_performance_summary()
         assert isinstance(performance, dict)
