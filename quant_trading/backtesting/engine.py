@@ -125,6 +125,8 @@ class BacktestEngine:
         self.timestamps: List[datetime] = []
         self.current_time: Optional[datetime] = None
         self.price_history: List[float] = []
+        self.signals_history: List['Signal'] = []  # Capture all signals for visualization
+        self.market_data: Optional[pd.DataFrame] = None  # Store market data for visualization
         
         # Risk tracking
         self.max_drawdown_seen = 0.0
@@ -141,6 +143,8 @@ class BacktestEngine:
         self.portfolio_values.clear()
         self.timestamps.clear()
         self.price_history.clear()
+        self.signals_history.clear()
+        self.market_data = None
         self.current_time = None
         self.max_drawdown_seen = 0.0
         self.peak_value = self.initial_capital
@@ -443,6 +447,9 @@ class BacktestEngine:
         """
         self.reset()
         
+        # Store market data for visualization
+        self.market_data = data.copy()
+        
         for idx, row in data.iterrows():
             self.update_time(row.name if hasattr(row.name, 'date') else idx)
             
@@ -456,6 +463,8 @@ class BacktestEngine:
             # Process signals
             if signals:
                 for signal in signals:
+                    # Capture signal for visualization (add timestamp)
+                    self._capture_signal(signal, self.current_time)
                     self._process_signal(signal, current_price)
             
             # Update portfolio value
@@ -497,6 +506,28 @@ class BacktestEngine:
                 else:
                     # Ignore sell signal - no long position to close
                     self.logger.info(f"Sell signal ignored: No long position in {symbol} (short selling disabled)")
+    
+    def _capture_signal(self, signal: 'Signal', timestamp: Optional[datetime]) -> None:
+        """
+        Capture signal for visualization
+        
+        Args:
+            signal: Signal object
+            timestamp: Current timestamp
+        """
+        # Add timestamp to signal if it doesn't have one
+        if hasattr(signal, 'timestamp'):
+            signal.timestamp = timestamp
+        else:
+            # Create a copy with timestamp (if possible)
+            try:
+                signal_dict = signal.__dict__.copy()
+                signal_dict['timestamp'] = timestamp
+                # Store the signal with timestamp info
+                self.signals_history.append(signal)
+            except:
+                # Fallback: just store the original signal
+                self.signals_history.append(signal)
     
     def get_performance_summary(self) -> Dict:
         """Generate comprehensive performance summary"""
@@ -555,4 +586,115 @@ class BacktestEngine:
             'total_slippage': total_slippage,
             'final_capital': returns_series.iloc[-1],
             'initial_capital': self.initial_capital
+        }
+    
+    def plot_backtest_results(
+        self,
+        strategy_name: str = "Trading Strategy",
+        symbol: str = "Asset",
+        show_plot: bool = True
+    ):
+        """
+        Create comprehensive backtest visualization
+        
+        Shows:
+        - Stock price with moving averages and trade signals
+        - Portfolio performance vs buy-and-hold
+        - Drawdown analysis
+        - Trade win/loss breakdown
+        - Performance summary statistics
+        
+        Args:
+            strategy_name: Name of the trading strategy for the title
+            symbol: Asset symbol for the title
+            show_plot: Whether to display the plot immediately
+            
+        Returns:
+            Matplotlib figure object or None
+        """
+        try:
+            from ..utils.visualization import PerformanceVisualizer
+        except ImportError:
+            self.logger.warning("Visualization module not available")
+            return None
+        
+        if self.market_data is None or not self.portfolio_values:
+            self.logger.warning("No backtest data available for visualization")
+            return None
+        
+        # Create visualizer
+        visualizer = PerformanceVisualizer(figsize=(16, 12))
+        
+        # Create comprehensive analysis plot
+        fig = visualizer.plot_backtest_analysis(
+            data=self.market_data,
+            portfolio_values=self.portfolio_values,
+            trades=self.trades,
+            signals=self.signals_history,
+            strategy_name=strategy_name,
+            symbol=symbol
+        )
+        
+        if fig and show_plot:
+            try:
+                import matplotlib.pyplot as plt
+                plt.show()
+            except ImportError:
+                self.logger.warning("Matplotlib not available for display")
+        
+        return fig
+    
+    def analyze_trades(self) -> Dict:
+        """
+        Detailed trade analysis for verification
+        
+        Returns:
+            Dictionary with trade breakdown and statistics
+        """
+        if not self.trades:
+            return {"message": "No trades executed", "trades": []}
+        
+        trade_analysis = []
+        cumulative_pnl = 0
+        
+        for i, trade in enumerate(self.trades):
+            cumulative_pnl += trade.pnl
+            
+            trade_info = {
+                "trade_number": i + 1,
+                "symbol": trade.symbol,
+                "side": trade.side,
+                "entry_time": trade.entry_time.strftime("%Y-%m-%d %H:%M:%S") if trade.entry_time else "N/A",
+                "exit_time": trade.exit_time.strftime("%Y-%m-%d %H:%M:%S") if trade.exit_time else "N/A",
+                "entry_price": f"${trade.entry_price:.2f}",
+                "exit_price": f"${trade.exit_price:.2f}",
+                "quantity": trade.quantity,
+                "pnl": f"${trade.pnl:.2f}",
+                "return_pct": f"{trade.return_pct * 100:.2f}%",
+                "cumulative_pnl": f"${cumulative_pnl:.2f}",
+                "commission": f"${trade.commission_paid:.2f}",
+                "slippage": f"${trade.slippage_cost:.2f}"
+            }
+            trade_analysis.append(trade_info)
+        
+        # Summary statistics
+        winning_trades = [t for t in self.trades if t.pnl > 0]
+        losing_trades = [t for t in self.trades if t.pnl < 0]
+        
+        summary = {
+            "total_trades": len(self.trades),
+            "winning_trades": len(winning_trades),
+            "losing_trades": len(losing_trades),
+            "win_rate": f"{len(winning_trades) / len(self.trades) * 100:.1f}%",
+            "total_pnl": f"${sum(t.pnl for t in self.trades):.2f}",
+            "avg_pnl_per_trade": f"${sum(t.pnl for t in self.trades) / len(self.trades):.2f}",
+            "largest_win": f"${max(t.pnl for t in self.trades):.2f}",
+            "largest_loss": f"${min(t.pnl for t in self.trades):.2f}",
+            "total_commission": f"${sum(t.commission_paid for t in self.trades):.2f}",
+            "total_slippage": f"${sum(t.slippage_cost for t in self.trades):.2f}"
+        }
+        
+        return {
+            "summary": summary,
+            "trades": trade_analysis
         }

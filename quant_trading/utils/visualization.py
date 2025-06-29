@@ -442,3 +442,304 @@ class PerformanceVisualizer:
             ax.text(0.5, 0.5, 'No trades executed', 
                    ha='center', va='center', transform=ax.transAxes)
             ax.set_title('Trade P&L')
+    
+    def plot_backtest_analysis(
+        self,
+        data: pd.DataFrame,
+        portfolio_values: List[float],
+        trades: Optional[List] = None,
+        signals: Optional[List] = None,
+        strategy_name: str = "Trading Strategy",
+        symbol: str = "Asset"
+    ) -> Optional[Figure]:
+        """
+        Create comprehensive backtest analysis visualization
+        
+        Shows:
+        - Stock price with moving averages
+        - Buy/sell signals and trade markers
+        - Portfolio value over time
+        - Trade analysis and performance metrics
+        
+        Args:
+            data: OHLCV market data
+            portfolio_values: Portfolio value series
+            trades: List of trade objects
+            signals: List of signal objects
+            strategy_name: Name of the trading strategy
+            symbol: Asset symbol
+            
+        Returns:
+            Matplotlib figure or None if matplotlib unavailable
+        """
+        if not HAS_MATPLOTLIB:
+            print("Matplotlib not available for plotting")
+            return None
+        
+        if data.empty or not portfolio_values:
+            print("No data to plot")
+            return None
+        
+        # Create figure with subplots
+        fig = plt.figure(figsize=(16, 12))
+        fig.suptitle(f'{strategy_name} - Backtest Analysis for {symbol}', 
+                    fontsize=16, fontweight='bold')
+        
+        # 1. Price chart with signals and indicators
+        ax1 = plt.subplot(3, 2, (1, 2))  # Top row, span 2 columns
+        self._plot_price_with_signals(ax1, data, trades, signals, symbol)
+        
+        # 2. Portfolio value over time
+        ax2 = plt.subplot(3, 2, 3)
+        self._plot_portfolio_performance_detailed(ax2, portfolio_values, data.index, data['close'])
+        
+        # 3. Drawdown analysis
+        ax3 = plt.subplot(3, 2, 4)
+        self._plot_drawdown_analysis(ax3, portfolio_values, data.index)
+        
+        # 4. Trade analysis
+        ax4 = plt.subplot(3, 2, 5)
+        self._plot_trade_analysis(ax4, trades)
+        
+        # 5. Performance summary
+        ax5 = plt.subplot(3, 2, 6)
+        self._plot_performance_summary(ax5, portfolio_values, trades)
+        
+        plt.tight_layout()
+        return fig
+    
+    def _plot_price_with_signals(self, ax, data, trades, signals, symbol):
+        """Plot price chart with signals and trade markers"""
+        # Plot price
+        ax.plot(data.index, data['close'], label='Close Price', color='black', linewidth=1.5)
+        
+        # Add moving averages if data has enough points
+        if len(data) >= 50:
+            ma20 = data['close'].rolling(20).mean()
+            ma50 = data['close'].rolling(50).mean()
+            ax.plot(data.index, ma20, label='MA 20', color='orange', alpha=0.7, linewidth=1)
+            ax.plot(data.index, ma50, label='MA 50', color='red', alpha=0.7, linewidth=1)
+        elif len(data) >= 20:
+            ma10 = data['close'].rolling(10).mean()
+            ma20 = data['close'].rolling(20).mean()
+            ax.plot(data.index, ma10, label='MA 10', color='orange', alpha=0.7, linewidth=1)
+            ax.plot(data.index, ma20, label='MA 20', color='red', alpha=0.7, linewidth=1)
+        
+        # Plot trade markers
+        if trades:
+            buy_dates = []
+            buy_prices = []
+            sell_dates = []
+            sell_prices = []
+            
+            for trade in trades:
+                if hasattr(trade, 'entry_time') and hasattr(trade, 'entry_price'):
+                    if hasattr(trade, 'side') and trade.side == 'long':
+                        buy_dates.append(trade.entry_time)
+                        buy_prices.append(trade.entry_price)
+                    
+                if hasattr(trade, 'exit_time') and hasattr(trade, 'exit_price'):
+                    sell_dates.append(trade.exit_time)
+                    sell_prices.append(trade.exit_price)
+            
+            # Plot buy signals
+            if buy_dates and buy_prices:
+                ax.scatter(buy_dates, buy_prices, color='green', marker='^', 
+                          s=100, label='Buy Signal', alpha=0.8, zorder=5)
+            
+            # Plot sell signals
+            if sell_dates and sell_prices:
+                ax.scatter(sell_dates, sell_prices, color='red', marker='v', 
+                          s=100, label='Sell Signal', alpha=0.8, zorder=5)
+        
+        # Plot additional signals if provided
+        if signals:
+            for signal in signals:
+                if hasattr(signal, 'action') and hasattr(signal, 'price'):
+                    try:
+                        # Try to get the signal date from data index
+                        signal_date = None
+                        if hasattr(signal, 'timestamp'):
+                            signal_date = signal.timestamp
+                        elif len(data) > 0:
+                            # Use a reasonable approximation
+                            signal_date = data.index[min(len(data)-1, len(signals)//2)]
+                        
+                        if signal_date and signal_date in data.index:
+                            action_str = str(signal.action).lower()
+                            if 'buy' in action_str:
+                                ax.scatter(signal_date, signal.price, color='lightgreen', 
+                                         marker='^', s=60, alpha=0.6, zorder=4)
+                            elif 'sell' in action_str:
+                                ax.scatter(signal_date, signal.price, color='lightcoral', 
+                                         marker='v', s=60, alpha=0.6, zorder=4)
+                    except:
+                        continue
+        
+        ax.set_title(f'{symbol} Price Chart with Signals')
+        ax.set_ylabel('Price ($)')
+        ax.legend(loc='upper left')
+        ax.grid(True, alpha=0.3)
+        
+        # Format x-axis
+        if len(data) > 30:
+            ax.tick_params(axis='x', rotation=45)
+    
+    def _plot_portfolio_performance_detailed(self, ax, portfolio_values, timestamps, prices):
+        """Plot portfolio performance vs buy-and-hold"""
+        # Portfolio performance
+        ax.plot(timestamps[:len(portfolio_values)], portfolio_values, 
+               label='Strategy', color='blue', linewidth=2)
+        
+        # Buy and hold benchmark
+        if len(prices) >= len(portfolio_values) and portfolio_values:
+            initial_capital = portfolio_values[0]
+            buy_hold = initial_capital * (prices[:len(portfolio_values)] / prices.iloc[0])
+            ax.plot(timestamps[:len(portfolio_values)], buy_hold, 
+                   label='Buy & Hold', color='gray', linestyle='--', alpha=0.7)
+        
+        ax.set_title('Portfolio Performance Comparison')
+        ax.set_ylabel('Portfolio Value ($)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Add performance stats
+        if len(portfolio_values) > 1:
+            total_return = (portfolio_values[-1] / portfolio_values[0] - 1) * 100
+            ax.text(0.02, 0.98, f'Strategy Return: {total_return:.1f}%', 
+                   transform=ax.transAxes, verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+    
+    def _plot_drawdown_analysis(self, ax, portfolio_values, timestamps):
+        """Plot drawdown with underwater curve"""
+        if len(portfolio_values) < 2:
+            ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center', 
+                   transform=ax.transAxes)
+            ax.set_title('Drawdown Analysis')
+            return
+        
+        values = pd.Series(portfolio_values)
+        running_max = values.expanding().max()
+        drawdown = (values - running_max) / running_max * 100
+        
+        ax.fill_between(timestamps[:len(portfolio_values)], drawdown, 0, 
+                       alpha=0.3, color='red', label='Drawdown')
+        ax.plot(timestamps[:len(portfolio_values)], drawdown, color='red', linewidth=1)
+        
+        ax.set_title('Drawdown Analysis')
+        ax.set_ylabel('Drawdown (%)')
+        ax.grid(True, alpha=0.3)
+        
+        # Add max drawdown
+        max_dd = abs(drawdown.min())
+        ax.text(0.02, 0.02, f'Max Drawdown: {max_dd:.1f}%', 
+               transform=ax.transAxes, verticalalignment='bottom',
+               bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.8))
+    
+    def _plot_trade_analysis(self, ax, trades):
+        """Plot trade win/loss analysis"""
+        if not trades or len(trades) == 0:
+            ax.text(0.5, 0.5, 'No trades executed', ha='center', va='center', 
+                   transform=ax.transAxes)
+            ax.set_title('Trade Analysis')
+            return
+        
+        # Analyze trades
+        wins = []
+        losses = []
+        
+        for trade in trades:
+            if hasattr(trade, 'pnl') and trade.pnl is not None:
+                if trade.pnl > 0:
+                    wins.append(trade.pnl)
+                else:
+                    losses.append(abs(trade.pnl))
+        
+        # Create win/loss chart
+        categories = []
+        values = []
+        colors = []
+        
+        if wins:
+            categories.append(f'Wins ({len(wins)})')
+            values.append(sum(wins))
+            colors.append('green')
+        
+        if losses:
+            categories.append(f'Losses ({len(losses)})')
+            values.append(-sum(losses))
+            colors.append('red')
+        
+        if categories:
+            bars = ax.bar(categories, values, color=colors, alpha=0.7)
+            ax.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+            
+            # Add value labels
+            for bar, value in zip(bars, values):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., 
+                       height + (max(values) * 0.05 if height >= 0 else min(values) * 0.05),
+                       f'${abs(value):.0f}', ha='center', 
+                       va='bottom' if height >= 0 else 'top')
+        
+        ax.set_title('Trade Win/Loss Analysis')
+        ax.set_ylabel('P&L ($)')
+        ax.grid(True, alpha=0.3)
+    
+    def _plot_performance_summary(self, ax, portfolio_values, trades):
+        """Plot key performance metrics as text summary"""
+        ax.axis('off')  # Turn off axis for text display
+        
+        if not portfolio_values or len(portfolio_values) < 2:
+            ax.text(0.5, 0.5, 'Insufficient data for analysis', 
+                   ha='center', va='center', transform=ax.transAxes, fontsize=12)
+            return
+        
+        # Calculate metrics
+        total_return = (portfolio_values[-1] / portfolio_values[0] - 1) * 100
+        
+        # Drawdown
+        values = pd.Series(portfolio_values)
+        running_max = values.expanding().max()
+        drawdown = (values - running_max) / running_max
+        max_drawdown = abs(drawdown.min()) * 100
+        
+        # Trade statistics
+        total_trades = len(trades) if trades else 0
+        winning_trades = 0
+        losing_trades = 0
+        total_pnl = 0
+        
+        if trades:
+            for trade in trades:
+                if hasattr(trade, 'pnl') and trade.pnl is not None:
+                    total_pnl += trade.pnl
+                    if trade.pnl > 0:
+                        winning_trades += 1
+                    else:
+                        losing_trades += 1
+        
+        win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+        
+        # Create summary text
+        summary_text = f"""Performance Summary:
+        
+Total Return: {total_return:.1f}%
+Max Drawdown: {max_drawdown:.1f}%
+
+Total Trades: {total_trades}
+Winning Trades: {winning_trades}
+Losing Trades: {losing_trades}
+Win Rate: {win_rate:.1f}%
+
+Total P&L: ${total_pnl:.0f}
+Avg P&L per Trade: ${total_pnl/total_trades:.0f}""" if total_trades > 0 else f"""Performance Summary:
+
+Total Return: {total_return:.1f}%
+Max Drawdown: {max_drawdown:.1f}%
+
+No trades executed"""
+        
+        ax.text(0.1, 0.9, summary_text, transform=ax.transAxes, fontsize=10,
+               verticalalignment='top', fontfamily='monospace',
+               bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
