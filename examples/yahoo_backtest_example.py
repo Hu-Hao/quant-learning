@@ -94,7 +94,7 @@ def run_backtest(data, strategy, initial_capital=100000):
     
     Args:
         data: Market data
-        strategy: Trading strategy
+        strategy: Trading strategy implementing StrategyProtocol
         initial_capital: Starting capital
         
     Returns:

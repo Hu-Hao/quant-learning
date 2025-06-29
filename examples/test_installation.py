@@ -112,13 +112,13 @@ def test_backtesting():
         data = create_sample_data(days=50, trend=0.1, seed=42)
         strategy = MovingAverageStrategy(short_window=5, long_window=15)
         
-        # Test backtesting
+        # Test backtesting with StrategyProtocol
         engine = BacktestEngine(initial_capital=100000)
         engine.run_backtest(data, strategy)
         
         assert len(engine.portfolio_values) > 0
         assert engine.initial_capital == 100000
-        print("✅ Backtesting execution")
+        print("✅ Backtesting execution with StrategyProtocol")
         
         # Test performance calculation
         performance = engine.get_performance_summary()

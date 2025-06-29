@@ -36,7 +36,7 @@ A comprehensive Jupyter notebook that demonstrates:
    ```python
    from quant_trading.backtesting.engine import BacktestEngine
    engine = BacktestEngine(initial_capital=100000)
-   engine.run_backtest(data, strategy)
+   engine.run_backtest(data, strategy)  # Only StrategyProtocol supported
    ```
 
 4. **Performance Analysis**
