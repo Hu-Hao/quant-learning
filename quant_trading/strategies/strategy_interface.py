@@ -44,6 +44,13 @@ class StrategyProtocol(Protocol):
     """
     Protocol defining the strategy interface
     No inheritance required - any class implementing these methods works
+    
+    This interface supports both our framework and VectorBT for cross-validation.
+    
+    Best Practice: Implement strategies with shared core logic:
+    - Create private _calculate_* methods for core calculations
+    - Use these in both get_signals() and generate_vectorbt_signals()
+    - This ensures consistency and reduces maintenance burden
     """
     
     def get_signals(self, data: pd.DataFrame) -> List[Signal]:
@@ -65,6 +72,31 @@ class StrategyProtocol(Protocol):
     def get_name(self) -> str:
         """Get strategy name"""
         ...
+    
+    # VectorBT compatibility methods
+    def generate_vectorbt_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        """
+        Generate entry and exit signals for VectorBT
+        
+        Args:
+            data: Market data (full historical data)
+            
+        Returns:
+            Tuple of (entries, exits) as boolean Series
+        """
+        ...
+    
+    def get_technical_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """
+        Get technical indicators for visualization (optional)
+        
+        Args:
+            data: Market data
+            
+        Returns:
+            Dictionary of indicator series
+        """
+        return {}
 
 
 # Utility functions for strategy validation (no inheritance needed)
@@ -118,3 +150,35 @@ def create_signal(
         confidence=confidence,
         metadata=metadata
     )
+
+
+def signals_to_vectorbt(strategy: 'StrategyProtocol', data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """
+    Generic function to convert get_signals() output to VectorBT format
+    
+    Uses the same iteration pattern as BacktestEngine for consistency.
+    
+    Args:
+        strategy: Strategy implementing StrategyProtocol
+        data: Market data (full historical dataset)
+        
+    Returns:
+        Tuple of (entries, exits) as boolean Series for VectorBT
+    """
+    # Initialize boolean series
+    entries = pd.Series(False, index=data.index)
+    exits = pd.Series(False, index=data.index)
+    
+    # Iterate through data exactly like BacktestEngine does
+    for idx, _ in data.iterrows():
+        # Get strategy signals (same as engine: data.loc[:idx])
+        signals = strategy.get_signals(data.loc[:idx])
+        
+        # Record any signals at this index
+        for signal in signals:
+            if signal.action == SignalType.BUY:
+                entries.at[idx] = True
+            elif signal.action == SignalType.SELL:
+                exits.at[idx] = True
+    
+    return entries, exits

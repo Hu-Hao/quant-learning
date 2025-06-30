@@ -5,7 +5,7 @@ Classic trend-following strategy using moving average crossovers
 
 import pandas as pd
 from typing import List, Optional, Dict, Any
-from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal
+from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal, signals_to_vectorbt
 
 
 class MovingAverageStrategy:
@@ -14,6 +14,12 @@ class MovingAverageStrategy:
     
     Generates buy signals when short MA crosses above long MA
     Generates sell signals when short MA crosses below long MA
+    
+    Generic Architecture:
+    - get_signals(): Core strategy logic (point-in-time)
+    - generate_vectorbt_signals(): Delegates to generic signals_to_vectorbt()
+    
+    This approach works for ANY strategy and eliminates duplicate logic.
     """
     
     def __init__(
@@ -46,6 +52,7 @@ class MovingAverageStrategy:
             'min_periods': min_periods or long_window
         }
             
+    
     def get_signals(self, data: pd.DataFrame) -> List[Signal]:
         """
         Generate moving average crossover signals
@@ -194,3 +201,36 @@ class MovingAverageStrategy:
         indicators['ma_ratio'] = indicators['short_ma'] / indicators['long_ma']
         
         return indicators
+    
+    def get_technical_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """
+        Get technical indicators for visualization (StrategyProtocol interface)
+        
+        Args:
+            data: Market data
+            
+        Returns:
+            Dictionary of indicator series for plotting
+        """
+        if len(data) < self.params['long_window']:
+            return {}
+        
+        return {
+            'short_ma': data['close'].rolling(window=self.params['short_window']).mean(),
+            'long_ma': data['close'].rolling(window=self.params['long_window']).mean()
+        }
+    
+    def generate_vectorbt_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        """
+        Generate entry and exit signals for VectorBT compatibility
+        
+        This uses the generic signals_to_vectorbt() function which works
+        for ANY strategy by calling get_signals() point-by-point.
+        
+        Args:
+            data: Market data (full historical dataset)
+            
+        Returns:
+            Tuple of (entries, exits) as boolean Series for VectorBT
+        """
+        return signals_to_vectorbt(self, data)

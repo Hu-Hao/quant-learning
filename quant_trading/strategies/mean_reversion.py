@@ -6,7 +6,7 @@ Trades based on price deviations from statistical mean
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict, Any
-from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal
+from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal, signals_to_vectorbt
 
 
 class MeanReversionStrategy:
@@ -281,3 +281,39 @@ class MeanReversionStrategy:
         indicators['bb_position'] = (data['close'] - indicators['bb_lower']) / indicators['bb_width']
         
         return indicators
+    
+    def get_technical_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
+        """
+        Get technical indicators for visualization (StrategyProtocol interface)
+        
+        Args:
+            data: Market data
+            
+        Returns:
+            Dictionary of indicator series for plotting
+        """
+        if len(data) < self.params['window']:
+            return {}
+        
+        indicators = self.get_indicator_values(data)
+        
+        return {
+            'sma': indicators['sma'],
+            'bb_upper': indicators['bb_upper'],
+            'bb_lower': indicators['bb_lower']
+        }
+    
+    def generate_vectorbt_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        """
+        Generate entry and exit signals for VectorBT compatibility
+        
+        This uses the generic signals_to_vectorbt() function which works
+        for ANY strategy by calling get_signals() point-by-point.
+        
+        Args:
+            data: Market data (full historical dataset)
+            
+        Returns:
+            Tuple of (entries, exits) as boolean Series for VectorBT
+        """
+        return signals_to_vectorbt(self, data)
