@@ -181,3 +181,6 @@ coverage/
 *.tmp
 *.temp
 temp/
+
+# Example directories with cloned repos
+examples/quant-learning/
