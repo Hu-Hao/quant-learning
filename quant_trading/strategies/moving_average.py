@@ -5,7 +5,7 @@ Classic trend-following strategy using moving average crossovers
 
 import pandas as pd
 from typing import List, Optional, Dict, Any
-from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal, run_backtrader_comparison
+from .strategy_interface import StrategyProtocol, Signal, SignalType, validate_data, create_signal
 
 
 class MovingAverageStrategy:
@@ -194,44 +194,3 @@ class MovingAverageStrategy:
         indicators['ma_ratio'] = indicators['short_ma'] / indicators['long_ma']
         
         return indicators
-    
-    def get_technical_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
-        """
-        Get technical indicators for visualization (StrategyProtocol interface)
-        
-        Args:
-            data: Market data
-            
-        Returns:
-            Dictionary of indicator series for plotting
-        """
-        if len(data) < self.params['long_window']:
-            return {}
-        
-        return {
-            'short_ma': data['close'].rolling(window=self.params['short_window']).mean(),
-            'long_ma': data['close'].rolling(window=self.params['long_window']).mean()
-        }
-    
-    def to_backtrader_strategy(self, **kwargs):
-        """
-        Convert this strategy to work with Backtrader framework (StrategyProtocol interface)
-        
-        Returns:
-            Backtrader strategy wrapper
-        """
-        from .strategy_interface import BacktraderStrategyWrapper
-        return BacktraderStrategyWrapper(self, **kwargs)
-    
-    def run_backtrader_comparison(self, data: pd.DataFrame, **kwargs) -> Dict[str, Any]:
-        """
-        Run this strategy on Backtrader for comparison
-        
-        Args:
-            data: Market data
-            **kwargs: Additional parameters for backtrader run
-            
-        Returns:
-            Backtrader results for comparison
-        """
-        return run_backtrader_comparison(data, self, **kwargs)
