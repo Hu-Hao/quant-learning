@@ -66,23 +66,33 @@ class TestApplePositionSizingRegression(unittest.TestCase):
             'volume': [np.random.randint(60000000, 120000000) for _ in prices]
         }, index=dates)
     
-    def test_position_size_limit_causes_rejections(self):
-        """Test that default position size limits cause order rejections with Apple + fixed quantity"""
+    def test_position_size_limit_fix_verification(self):
+        """Test that the position size limit fix improves execution for Apple + fixed quantity"""
         strategy = MovingAverageStrategy(
             short_window=10,
             long_window=30,
             quantity=100  # Fixed 100 shares
         )
         
-        # Test with default restrictive limits
-        restrictive_engine = BacktestEngine(
+        # Test with NEW default limits (should be 1.0 now)
+        new_default_engine = BacktestEngine(
             initial_capital=100000,
             commission=0.001,
-            # max_position_size defaults to 0.1 (10%)
+            # max_position_size now defaults to 1.0 (100%)
         )
         
-        restrictive_engine.run_backtest(self.test_data, strategy)
-        restrictive_trades = len(restrictive_engine.trades)
+        new_default_engine.run_backtest(self.test_data, strategy)
+        new_trades = len(new_default_engine.trades)
+        
+        # Test with OLD restrictive limits for comparison
+        old_restrictive_engine = BacktestEngine(
+            initial_capital=100000,
+            commission=0.001,
+            max_position_size=0.1,  # Force old 10% behavior
+        )
+        
+        old_restrictive_engine.run_backtest(self.test_data, strategy)
+        old_trades = len(old_restrictive_engine.trades)
         
         # Count total signals that should be generated
         total_signals = 0
@@ -91,18 +101,23 @@ class TestApplePositionSizingRegression(unittest.TestCase):
             signals = strategy.get_signals(partial_data, available_capital=100000)
             total_signals += len(signals)
         
-        # If Apple price is ~$200-250 and we trade 100 shares, that's $20k-25k
-        # This exceeds 10% of $100k capital, so orders should be rejected
+        # Verify the fix improved execution
         sample_price = self.test_data['close'].iloc[50]  # Mid-point price
-        position_value = 100 * sample_price
         
-        if position_value > 10000:  # Exceeds 10% of $100k
-            # Should have significant order rejections
-            if total_signals > 0:
-                execution_rate = restrictive_trades / total_signals
-                self.assertLess(execution_rate, 0.5,
-                    f"With Apple prices (~${sample_price:.2f}), fixed 100 shares should cause "
-                    f"order rejections due to position size limits. Got {execution_rate:.1%} execution rate.")
+        if total_signals > 0:
+            new_execution_rate = new_trades / total_signals
+            old_execution_rate = old_trades / total_signals
+            
+            # The fix should enable better execution
+            self.assertGreaterEqual(new_execution_rate, old_execution_rate,
+                f"New default (100% limit) should enable at least as much execution as old (10% limit). "
+                f"Old: {old_execution_rate:.1%}, New: {new_execution_rate:.1%}")
+            
+            # With Apple prices, the new default should allow reasonable execution
+            if sample_price > 150:  # High-priced stock like Apple
+                self.assertGreaterEqual(new_execution_rate, 0.3,
+                    f"With Apple-like prices (${sample_price:.2f}), new 100% limit should enable "
+                    f"reasonable execution rate. Got {new_execution_rate:.1%}")
     
     def test_permissive_limits_improve_execution(self):
         """Test that permissive position size limits improve execution"""

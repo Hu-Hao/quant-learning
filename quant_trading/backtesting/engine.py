@@ -92,7 +92,7 @@ class BacktestEngine:
         initial_capital: float = 100000,
         commission: float = 0.001,
         slippage: float = 0.001,
-        max_position_size: float = 0.1,  # Maximum position as fraction of capital
+        max_position_size: float = 1.0,  # Maximum position as fraction of capital (like VectorBT)
         risk_free_rate: float = 0.02,    # For Sharpe ratio calculation
         benchmark_symbol: Optional[str] = None,
         allow_short_selling: bool = True  # Allow short selling (sell signals)
