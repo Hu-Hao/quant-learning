@@ -86,7 +86,7 @@ class TestVectorBTCompatibilityFinal(unittest.TestCase):
         
         for idx, _ in self.data.iterrows():
             partial_data = self.data.loc[:idx]
-            signals = self.strategy.get_signals(partial_data)
+            signals = self.strategy.get_signals(partial_data, available_capital=100000)
             all_signals.extend(signals)
         
         # Should generate at least one signal
@@ -108,7 +108,7 @@ class TestVectorBTCompatibilityFinal(unittest.TestCase):
         
         for idx, _ in self.data.iterrows():
             partial_data = self.data.loc[:idx]
-            signals = self.strategy.get_signals(partial_data)
+            signals = self.strategy.get_signals(partial_data, available_capital=100000)
             
             for signal in signals:
                 if signal.action.value == 'buy':

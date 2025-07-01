@@ -89,7 +89,7 @@ class TestMovingAverageStrategy(unittest.TestCase):
         }, index=dates)
         
         # Get signals for the full dataset
-        signals = self.strategy.get_signals(data)
+        signals = self.strategy.get_signals(data, available_capital=100000)
         
         # Should have some signals
         self.assertIsInstance(signals, list)
@@ -105,7 +105,7 @@ class TestMovingAverageStrategy(unittest.TestCase):
     def test_insufficient_data(self):
         """Test behavior with insufficient data"""
         short_data = create_sample_data(5)  # Less than long_window
-        signals = self.strategy.get_signals(short_data)
+        signals = self.strategy.get_signals(short_data, available_capital=100000)
         self.assertEqual(len(signals), 0)
         
     def test_indicator_values(self):

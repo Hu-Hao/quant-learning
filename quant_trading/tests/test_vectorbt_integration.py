@@ -76,7 +76,7 @@ class TestVectorBTIntegration(unittest.TestCase):
         # Simulate the same iteration as both engine and VectorBT
         for idx, _ in self.test_data.iterrows():
             partial_data = self.test_data.loc[:idx]
-            signals = strategy.get_signals(partial_data)
+            signals = strategy.get_signals(partial_data, available_capital=100000)
             
             for signal in signals:
                 if signal.action.value == 'buy':
@@ -106,7 +106,7 @@ class TestVectorBTIntegration(unittest.TestCase):
         
         for idx, _ in self.test_data.iterrows():
             partial_data = self.test_data.loc[:idx]
-            signals = strategy.get_signals(partial_data)
+            signals = strategy.get_signals(partial_data, available_capital=100000)
             
             for signal in signals:
                 if signal.action.value == 'buy':
@@ -181,7 +181,7 @@ class TestVectorBTIntegration(unittest.TestCase):
         for signal_idx in entries[entries].index:
             # At this point, there should be a buy signal from get_signals
             partial_data = test_data.loc[:signal_idx]
-            signals = strategy.get_signals(partial_data)
+            signals = strategy.get_signals(partial_data, available_capital=100000)
             
             buy_signals = [s for s in signals if s.action.value == 'buy']
             self.assertGreater(len(buy_signals), 0, 
@@ -235,7 +235,7 @@ class TestSignalConversion(unittest.TestCase):
         
         # Create a mock strategy that returns specific signals
         class MockStrategy:
-            def get_signals(self, data):
+            def get_signals(self, data, available_capital=100000):
                 signals = []
                 if len(data) >= 5:
                     from quant_trading.strategies.strategy_interface import create_signal
