@@ -458,7 +458,7 @@ class BacktestEngine:
             self.price_history.append(current_price)
             
             # Get strategy signals
-            signals = strategy.get_signals(data.loc[:idx])
+            signals = strategy.get_signals(data.loc[:idx], self.capital)
             
             # Process signals
             if signals:

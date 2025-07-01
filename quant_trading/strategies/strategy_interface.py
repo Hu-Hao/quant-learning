@@ -152,7 +152,7 @@ def create_signal(
     )
 
 
-def signals_to_vectorbt(strategy: 'StrategyProtocol', data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+def signals_to_vectorbt(strategy: 'StrategyProtocol', data: pd.DataFrame, available_capital: float = 100000) -> tuple[pd.Series, pd.Series]:
     """
     Generic function to convert get_signals() output to VectorBT format
     
@@ -161,6 +161,7 @@ def signals_to_vectorbt(strategy: 'StrategyProtocol', data: pd.DataFrame) -> tup
     Args:
         strategy: Strategy implementing StrategyProtocol
         data: Market data (full historical dataset)
+        available_capital: Available capital for position sizing
         
     Returns:
         Tuple of (entries, exits) as boolean Series for VectorBT
@@ -172,7 +173,7 @@ def signals_to_vectorbt(strategy: 'StrategyProtocol', data: pd.DataFrame) -> tup
     # Iterate through data exactly like BacktestEngine does
     for idx, _ in data.iterrows():
         # Get strategy signals (same as engine: data.loc[:idx])
-        signals = strategy.get_signals(data.loc[:idx])
+        signals = strategy.get_signals(data.loc[:idx], available_capital)
         
         # Record any signals at this index
         for signal in signals:
