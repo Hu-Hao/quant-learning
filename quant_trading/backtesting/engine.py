@@ -344,7 +344,9 @@ class BacktestEngine:
                     slippage_cost=slippage_cost
                 ))
                 
-                self.capital += net_pnl
+                # Add back sale proceeds (not just P&L)
+                sale_proceeds = abs(current_pos.quantity) * execution_price - commission_cost
+                self.capital += sale_proceeds
                 del self.positions[symbol]
                 
             elif ((current_pos.quantity > 0 and new_quantity > 0) or 
